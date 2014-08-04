@@ -1,0 +1,38 @@
+{
+  "name": "level-perstore",
+  "version": "0.0.0",
+  "description": "a perstore implementation for leveldb",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "dependencies": {
+    "level-create": "^1.1.0",
+    "q": "^1.0.1"
+  },
+  "devDependencies": {
+    "intern": "^2.0.1",
+    "level-sublevel": "^6.2.2",
+    "leveldown": "^0.10.2",
+    "levelup": "^0.18.6",
+    "sinon": "^1.10.3"
+  },
+  "scripts": {
+    "test": "intern-client config=tests/intern.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/neonstalwart/level-perstore.git"
+  },
+  "keywords": [
+    "perstore",
+    "leveldb",
+    "persevere"
+  ],
+  "author": "Ben Hockey",
+  "license": "BSD",
+  "bugs": {
+    "url": "https://github.com/neonstalwart/level-perstore/issues"
+  },
+  "homepage": "https://github.com/neonstalwart/level-perstore"
+}
