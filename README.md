@@ -3,6 +3,8 @@
 A [perstore](https://github.com/persvr/perstore) interface that persists data using
 [LevelDB](https://github.com/rvagg/node-levelup).
 
+[![Build Status](https://travis-ci.org/neonstalwart/level-perstore.svg?branch=master)](https://travis-ci.org/neonstalwart/level-perstore)
+
 # Example
 
 ```js
