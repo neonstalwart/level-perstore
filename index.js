@@ -1,7 +1,36 @@
 module.exports = Store;
 
 var Q = require('q'),
-	create = require('level-create');
+	create = require('level-create'),
+	retry = require('retry'),
+	uuid = require('uuid'),
+	createFilter = require('rql/js-array').query,
+	through = require('through'),
+	reader = require('q-io/reader');
+
+function add(db, key, value) {
+	var dfd = Q.defer(),
+		operation = retry.operation();
+
+	function resolve(value) {
+		dfd.resolve(value);
+	}
+
+	function tryAgain(err) {
+		// only retry if the db is locked
+		if (err.code === 'LOCKED' && operation.retry(err)) {
+			return;
+		}
+
+		dfd.reject(operation.mainError() || err);
+	}
+
+	operation.attempt(function () {
+		Q.nfcall(create, db, key, value).then(resolve, tryAgain);
+	});
+
+	return dfd.promise;
+}
 
 function Store(options) {
 	if (!options || !options.db) {
@@ -20,10 +49,6 @@ Store.prototype = {
 
 	idProperty: 'id',
 
-	getIdentity: function (value) {
-		return value[ this.idProperty ];
-	},
-
 	get: function (id) {
 		return Q.ninvoke(this.db, 'get', id).catch(function (err) {
 			// notFound is not something to be considered an error in perstore
@@ -38,16 +63,92 @@ Store.prototype = {
 		options = options || {};
 
 		var dbOptions = {},
-			key = 'id' in options ? value[ this.idProperty ] = options.id : this.getIdentity(value),
-			db = this.db;
+			idProperty = this.idProperty,
+			key = 'id' in options ?
+				// use the id provided in options and assign it to the value
+				value[ idProperty ] = options.id :
+				value[ idProperty ] != null ?
+					// use the id in the value
+					value[ idProperty ] :
+					// create a new id
+					value[ idProperty ] = uuid.v4(),
+			db = this.db,
+			result;
 
 		dbOptions.sync = options.sync;
 
-		return options.overwrite === false ?
+		result = options.overwrite === false ?
 			// TODO: include dbOptions after https://github.com/substack/level-create/issues/1 is addressed
 			// fail if a value alread exists at the key
-			Q.nfcall(create, db, key, value) :
+			add(db, key, value) :
 			// unconditionally write the value to the key
 			Q.ninvoke(db, 'put', key, value, dbOptions);
+
+		return result.then(function () {
+			return key;
+		});
+	},
+
+	delete: function (id, options) {
+		options = options || {};
+
+		var dbOptions = {
+				sync: options.sync
+			};
+
+		return Q.ninvoke(this.db, 'del', id, dbOptions);
+	},
+
+	query: function (query, options) {
+		options = options || {};
+
+		var operators = options.operators || {},
+			stream = this.db.createValueStream().pipe(through(function write(data) {
+				// filter the data first to trigger the operators.limit interception
+				var matches = filter([ data ]).length;
+
+				if (matches) {
+					// drop this value if we haven't reached the start of the range
+					if (range && stats.current++ < range.start) {
+						return;
+					}
+					this.push(data);
+					// stop the stream if we got as many as were requested
+					if (range && ++stats.count > range.count) {
+						this.end();
+					}
+				}
+			}, function end() {
+				this.push(null);
+			})),
+			stats = {
+				count: 0,
+				current: 0
+			},
+			range,
+			filter;
+
+		// intercept the limit operator to accomplish 2 things:
+		// 1. extract the limit params
+		// 2. prevent the filter applying the limit since we apply it to the stream directly
+		operators.limit = function (count, start, maxCount) {
+			if (!range) {
+				range = {
+					count: count,
+					start: start,
+					// TODO: what does maxCount represent?
+					maxCount: maxCount
+				};
+			}
+
+			return this;
+		};
+
+		filter = createFilter(query, {
+			parameters: options.parameters,
+			operators: operators
+		});
+
+		return reader(stream);
 	}
 };

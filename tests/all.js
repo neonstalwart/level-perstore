@@ -6,6 +6,7 @@ define(function (require) {
 		LevelUp = require('dojo/node!levelup'),
 		LevelDown = require('dojo/node!leveldown'),
 		Q = require('dojo/node!q'),
+		Query = require('dojo/node!rql/query').Query,
 		dbLocation = './tests/db',
 		destroyDb = Q.nbind(LevelDown.destroy, LevelDown, dbLocation),
 		dbOptions = {
@@ -80,11 +81,25 @@ define(function (require) {
 					};
 
 				return store.put(value).then(function () {
-						return Q.ninvoke(db,'get', key);
+						return Q.ninvoke(db, 'get', key);
 					})
 					.then(function (actual) {
 						assert.deepEqual(actual, value, 'store.put should insert values into the db');
 					});
+			},
+
+			'resolves to identifier of object': function () {
+				var value = {
+						name: 'bar'
+					};
+
+				return store.put(value).then(function (key) {
+					return Q.ninvoke(db, 'get', key)
+						.then(function (actual) {
+							assert.strictEqual(actual.id,  key, 'key should be generated when not provided');
+							assert.strictEqual(actual.name, value.name, 'store.put should resolve to the key');
+						});
+				});
 			},
 
 			options: {
@@ -107,6 +122,27 @@ define(function (require) {
 					.catch(function (err) {
 						assert.propertyVal(err, 'code', 'EXISTS');
 					});
+				},
+
+				'can add values in a tight loop': function () {
+					var keys = [],
+						numValues = 2000,
+						options = {
+							overwrite: false
+						};
+
+					while (numValues--) {
+						keys.push(Math.random());
+					}
+
+					return Q.all(keys.map(function (key) {
+							return store.put({
+								id: key
+							}, options);
+						}))
+						.then(function (actual) {
+							assert.deepEqual(actual, keys, 'parallel adds should be possible');
+						});
 				},
 
 				'id indicates key for object': function () {
@@ -135,29 +171,24 @@ define(function (require) {
 
 		get: {
 			'returns a promise': function () {
-				var store = new Store({ db: mockDb }),
-					id = {},
-					result = store.get(id);
+				var id = {},
+					result = mockStore.get(id);
 
 				assert.isFunction(result.then, 'store.get returns a promise');
 			},
 
 			'should call db.get with id': function () {
-				var store = new Store({
-						db: mockDb
-					}),
-					id = {};
+				var id = {};
 
 				mockDb.get.yieldsAsync(null);
 
-				return store.get(id).then(function () {
+				return mockStore.get(id).then(function () {
 					assert.ok(mockDb.get.calledWith(id), 'get should call db.get with id');
 				});
 			},
 
 			'handles not found error': function () {
-				var id = {},
-					store = new Store({ db: db });
+				var id = {};
 
 				return store.get(id).then(function (obj) {
 					assert.isUndefined(obj, 'non-matching id should return undefined');
@@ -165,8 +196,7 @@ define(function (require) {
 			},
 
 			'returns value found at the requested key': function () {
-				var store = new Store({ db: db }),
-					key = 'foo',
+				var key = 'foo',
 					value = {
 						id: key,
 						name: 'bar'
@@ -179,6 +209,62 @@ define(function (require) {
 					.then(function (actual) {
 						assert.deepEqual(actual, value, 'store.get should retrieve values stored at key');
 					});
+			},
+
+			'should always return new objects': function () {
+				var key = 'foo',
+					value = {
+						id: key,
+						name: 'bar'
+					};
+
+				return store.put(value)
+					.then(function () {
+						return Q.all([
+							store.get(key),
+							store.get(key)
+						]);
+					})
+					.then(function (gets) {
+						gets.reduce(function (one, another) {
+							assert.notEqual(one, another, 'store.get should return new instances');
+							return another;
+						}, value);
+					});
+			}
+		},
+
+		delete: {
+			'should remove an object from the db': function () {
+				var key = 'foo',
+					value = {
+						id: key,
+						name: 'bar'
+					};
+
+				return store.put(value)
+					.then(function () {
+						return store.delete(key);
+					})
+					.then(function () {
+						return store.get(key);
+					})
+					.then(function (obj) {
+						assert.isUndefined(obj, 'delete should remove objects from the db');
+					});
+			}
+		},
+
+		query: {
+			'returns a promise for a forEachable stream': function () {
+				var query = new Query().eq('id', 'foo'),
+					results = store.query(query);
+
+				assert.isFunction(results.then, 'query results should be a promise');
+
+				return results.then(function (stream) {
+					assert.isFunction(stream.forEach, 'results should resolve to a forEachable');
+				});
 			}
 		}
 	});
