@@ -36,7 +36,6 @@ define(function (require) {
 		},
 
 		constructor: {
-
 			'is a function': function () {
 				assert.isFunction(Store, 'Store is a function');
 			},
