@@ -5,8 +5,7 @@ var Q = require('q'),
 	retry = require('retry'),
 	uuid = require('uuid'),
 	createFilter = require('rql/js-array').query,
-	through = require('through'),
-	reader = require('q-io/reader');
+	IteratorReadStream = require('./IteratorReadStream');
 
 function add(db, key, value) {
 	var dfd = Q.defer(),
@@ -103,24 +102,7 @@ Store.prototype = {
 		options = options || {};
 
 		var operators = options.operators || {},
-			stream = this.db.createValueStream().pipe(through(function write(data) {
-				// filter the data first to trigger the operators.limit interception
-				var matches = filter([ data ]).length;
-
-				if (matches) {
-					// drop this value if we haven't reached the start of the range
-					if (range && stats.current++ < range.start) {
-						return;
-					}
-					this.push(data);
-					// stop the stream if we got as many as were requested
-					if (range && ++stats.count > range.count) {
-						this.end();
-					}
-				}
-			}, function end() {
-				this.push(null);
-			})),
+			stream = new IteratorReadStream(this.db),
 			stats = {
 				count: 0,
 				current: 0
@@ -149,6 +131,29 @@ Store.prototype = {
 			operators: operators
 		});
 
-		return reader(stream);
+		return stream.then(function (stream) {
+			return Object.create(stream, {
+				forEach: {
+					value: function (write) {
+						return stream.forEach(function (data) {
+							// filter the data first to trigger the operators.limit interception
+							var matches = filter([ data ]).length;
+
+							if (matches) {
+								// drop this value if we haven't reached the start of the range
+								if (range && stats.current++ < range.start) {
+									return;
+								}
+								write(data);
+								// stop the stream if we got as many as were requested
+								if (range && ++stats.count > range.count) {
+									stream.close();
+								}
+							}
+						});
+					}
+				}
+			});
+		});
 	}
 };
