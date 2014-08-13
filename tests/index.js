@@ -6,6 +6,11 @@ define(function (require) {
 		dbUtil = require('./util/db'),
 		Q = require('dojo/node!q'),
 		Query = require('dojo/node!rql/query').Query,
+		data = [
+			{ id: 1, value: 'one' },
+			{ id: 2, value: 'two' },
+			{ id: 3, value: 'three' }
+		],
 		db,
 		mockDb,
 		mockStore,
@@ -248,31 +253,38 @@ define(function (require) {
 		},
 
 		query: {
+			beforeEach: function () {
+				return Q.all(data.map(function (item) {
+					store.put(item);
+				}));
+			},
+
 			'returns a promise for a forEachable stream': function () {
-				var key = 'foo',
-					value1 = {
-						id: key,
-						name: 'bar'
-					},
-					value2 = {
-						id: 'baz',
-						name: 'bar'
-					},
-					query = new Query().eq('id', key);
+				var key = data[0].id,
+					query = new Query().eq('id', key),
+					results = store.query(query);
 
-				return Q.all([
-					store.put(value1),
-					store.put(value2)
-				]).then(function () {
-					var results = store.query(query);
+				assert.isFunction(results.then, 'query results should be a promise');
 
-					assert.isFunction(results.then, 'query results should be a promise');
+				return results.then(function (stream) {
+					assert.isFunction(stream.forEach, 'results should resolve to a forEachable');
+					return stream.forEach(function (item) {
+						assert.propertyVal(item, 'id', key, 'items should match query');
+					});
+				});
+			},
 
-					return results.then(function (stream) {
-						assert.isFunction(stream.forEach, 'results should resolve to a forEachable');
-						return stream.forEach(function (item) {
-							assert.strictEquals(item, 'id', key, 'items should match query');
-						});
+			'limits results based on query': function () {
+				var query = new Query().gt('id', 0).limit(2);
+
+				return store.query(query).then(function (stream) {
+					var length = 0;
+					return stream.forEach(function (item) {
+						assert.ok(item.id > 0, 'items should match query');
+						length++;
+					})
+					.then(function () {
+						assert.strictEqual(length, 2, 'query limit should be applied');
 					});
 				});
 			}

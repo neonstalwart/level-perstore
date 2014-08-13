@@ -136,17 +136,18 @@ Store.prototype = {
 				forEach: {
 					value: function (write) {
 						return stream.forEach(function (data) {
-							// filter the data first to trigger the operators.limit interception
-							var matches = filter([ data ]).length;
+							var item = data.value,
+								// filter the data first to trigger the operators.limit interception
+								matches = filter([ item ]).length;
 
 							if (matches) {
 								// drop this value if we haven't reached the start of the range
 								if (range && stats.current++ < range.start) {
 									return;
 								}
-								write(data);
+								write(item);
 								// stop the stream if we got as many as were requested
-								if (range && ++stats.count > range.count) {
+								if (range && ++stats.count >= range.count) {
 									stream.close();
 								}
 							}
