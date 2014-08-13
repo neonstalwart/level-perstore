@@ -289,7 +289,7 @@ define(function (require) {
 				});
 			}
 
-			// TODO: limit, filter, sort(?!)
+			// TODO: sort(?!)
 		}
 	});
 });
