@@ -8,7 +8,6 @@ function Reader(db, iterOptions) {
 		begin = Q.defer(),
 		end = Q.defer(),
 		stream = {
-			read: read,
 			forEach: forEach,
 			close: close
 		},
@@ -48,14 +47,6 @@ function Reader(db, iterOptions) {
 				value: db._codec.decodeValue(value, db.options)
 			});
 			slurp();
-		});
-	}
-
-	function read() {
-		receiver = undefined;
-		slurp();
-		return end.promise.then(function () {
-			return chunks;
 		});
 	}
 
