@@ -1,6 +1,6 @@
 {
   "name": "level-perstore",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "a perstore implementation for leveldb",
   "main": "index.js",
   "directories": {
