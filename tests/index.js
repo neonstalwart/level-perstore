@@ -259,16 +259,16 @@ define(function (require) {
 				}));
 			},
 
-			'returns a promise for a forEachable stream': function () {
+			'returns a promise for the results': function () {
 				var key = data[0].id,
 					query = new Query().eq('id', key),
 					results = store.query(query);
 
 				assert.isFunction(results.then, 'query results should be a promise');
 
-				return results.then(function (stream) {
-					assert.isFunction(stream.forEach, 'results should resolve to a forEachable');
-					return stream.forEach(function (item) {
+				return results.then(function (results) {
+					assert.isArray(results, 'results should be an array');
+					results.forEach(function (item) {
 						assert.propertyVal(item, 'id', key, 'items should match query');
 					});
 				});
@@ -277,15 +277,11 @@ define(function (require) {
 			'limits results based on query': function () {
 				var query = new Query().gt('id', 0).limit(2);
 
-				return store.query(query).then(function (stream) {
-					var length = 0;
-					return stream.forEach(function (item) {
+				return store.query(query).then(function (results) {
+					results.forEach(function (item) {
 						assert.ok(item.id > 0, 'items should match query');
-						length++;
-					})
-					.then(function () {
-						assert.strictEqual(length, 2, 'query limit should be applied');
 					});
+					assert.strictEqual(results.length, 2, 'query limit should be applied');
 				});
 			}
 
