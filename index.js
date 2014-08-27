@@ -132,37 +132,40 @@ Store.prototype = {
 			operators: operators
 		});
 
+		stream = stream.then(function (stream) {
+			return Object.create(stream, {
+				forEach: {
+					value: function (write) {
+						return stream.forEach(function (data) {
+							var item = data.value,
+								// filter the data first to trigger the operators.limit interception
+								matches = filter([ item ]).length;
+
+							if (matches) {
+								// drop this value if we haven't reached the start of the range
+								if (range && stats.current++ < range.start) {
+									return;
+								}
+								write(item);
+								// stop the stream if we got as many as were requested
+								if (range && ++stats.count >= range.count) {
+									stream.close();
+								}
+							}
+						});
+					}
+				}
+			});
+		});
+
 		results = {
 			then: function (cb, err) {
-				var chunks = [];
-				return results.forEach(function (chunk) {
-					chunks.push(chunk);
-				})
-				.then(function () {
-					return chunks;
-				})
-				.then(cb, err);
+				return stream.then(cb, err);
 			},
 
 			forEach: function (write) {
 				return stream.then(function (stream) {
-					return stream.forEach(function (data) {
-						var item = data.value,
-							// filter the data first to trigger the operators.limit interception
-							matches = filter([ item ]).length;
-
-						if (matches) {
-							// drop this value if we haven't reached the start of the range
-							if (range && stats.current++ < range.start) {
-								return;
-							}
-							write(item);
-							// stop the stream if we got as many as were requested
-							if (range && ++stats.count >= range.count) {
-								stream.close();
-							}
-						}
-					});
+					return stream.forEach(write);
 				});
 			}
 		};
